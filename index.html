@@ -3,10 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hello World</title>
+    <title>Supabase + Vercel</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <h1>Hello, Vercel!</h1>
-    <p>This is a bare bones project.</p>
+    <h1>Loading...</h1>
+
+    <script>
+        // 2. Initialize the client
+        const supabaseUrl = 'https://hqtyztqjnwpbfcbijuvb.supabase.co'
+        const supabaseKey = 'sb_publishable_7vFBFbpeXCLYwo66KTb3uQ_RkQIKsMG'
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey)
+
+        // 3. Fetch data
+        async function getMessages() {
+            const { data, error } = await supabase
+                .from('messages')
+                .select()
+            
+            if (error) {
+                console.error(error)
+                document.querySelector('h1').innerText = "Error loading data."
+            } else {
+                // Display the first message found
+                const message = data[0]?.text || "No messages found."
+                document.querySelector('h1').innerText = message
+            }
+        }
+
+        getMessages()
+    </script>
 </body>
 </html>
