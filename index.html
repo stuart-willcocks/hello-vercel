@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Supabase + Vercel</title>
+    <title>Supabase + Vercel Realtime</title>
+    
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
+    
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -16,49 +18,58 @@
     </div>
 
     <script>
+        // --- CONFIGURATION ---
         const supabaseUrl = 'https://hqtyztqjnwpbfcbijuvb.supabase.co'
         const supabaseKey = 'sb_publishable_7vFBFbpeXCLYwo66KTb3uQ_RkQIKsMG'
         const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey)
 
-        // 1. Fetch Data (READ)
+        // --- 1. READ (Fetch the latest message on load) ---
         async function getMessages() {
             const { data, error } = await supabaseClient
                 .from('messages')
                 .select()
-                .order('id', { ascending: false }) // Show newest first
+                .order('id', { ascending: false })
                 .limit(1)
             
-            if (error) {
-                console.error(error)
-            } else {
-                const message = data[0]?.text || "No messages found."
-                document.querySelector('h1').innerText = message
+            if (!error && data[0]) {
+                document.querySelector('h1').innerText = data[0].text
             }
         }
 
-        // 2. Send Data (WRITE)
+        // --- 2. WRITE (Send data to the DB) ---
         async function sendMessage() {
             const input = document.getElementById('msgInput')
             const text = input.value
-
-            if (!text) return alert("Type something first!")
+            if (!text) return alert("Type something!")
 
             const { error } = await supabaseClient
                 .from('messages')
-                .insert({ text: text }) // The column name is 'text'
+                .insert({ text: text })
 
             if (error) {
-                alert("Error saving: " + error.message)
+                alert(error.message)
             } else {
-                input.value = "" // Clear the box
-                getMessages()    // Refresh the title instantly
+                input.value = "" 
+                // We do NOT call getMessages() here anymore.
+                // We rely on the Realtime subscription below to update the screen.
             }
         }
 
+        // --- 3. REALTIME (Listen for changes) ---
+        supabaseClient
+            .channel('public:messages') 
+            .on('postgres_changes', 
+                { event: 'INSERT', schema: 'public', table: 'messages' }, 
+                (payload) => {
+                    console.log('Realtime update received!', payload)
+                    const newMessage = payload.new.text
+                    document.querySelector('h1').innerText = newMessage
+                }
+            )
+            .subscribe()
+
+        // Start the app
         getMessages()
     </script>
 </body>
 </html>
-
-
-
