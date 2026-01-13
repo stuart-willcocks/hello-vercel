@@ -31,28 +31,27 @@
         async function checkSession() {
             const { data: { session } } = await supabaseClient.auth.getSession()
             updateUI(session)
-        }
-
-        // 2. Handle Login
-        async function login() {
-            await supabaseClient.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    queryParams: {
-                        access_type: 'offline',
-                        prompt: 'consent',
-                    },
-                },
+            
+            // Listen for auth changes
+            supabaseClient.auth.onAuthStateChange((_event, session) => {
+                updateUI(session)
             })
         }
 
-        // 3. Handle Logout
-        async function logout() {
-            await supabaseClient.auth.signOut()
-            updateUI(null)
+        // 2. Login
+        async function login() {
+            await supabaseClient.auth.signInWithOAuth({
+                provider: 'google',
+                options: { queryParams: { access_type: 'offline', prompt: 'consent' } }
+            })
         }
 
-        // 4. Update UI Helper
+        // 3. Logout
+        async function logout() {
+            await supabaseClient.auth.signOut()
+        }
+
+        // 4. UI Helper
         function updateUI(session) {
             if (session) {
                 document.getElementById('login-ui').style.display = 'none'
@@ -64,7 +63,15 @@
             }
         }
 
-        // --- EXISTING CHAT LOGIC ---
+        // --- NEW DATABASE LOGIC ---
+
+        // Display a message (We made this a reusable function)
+        function displayMessage(record) {
+            const display = record.user_email ? `${record.user_email}: ${record.text}` : record.text
+            document.querySelector('h1').innerText = display
+        }
+
+        // READ: Fetch latest message
         async function getMessages() {
             const { data, error } = await supabaseClient
                 .from('messages')
@@ -72,25 +79,41 @@
                 .order('id', { ascending: false })
                 .limit(1)
             
-            if (!error && data[0]) document.querySelector('h1').innerText = data[0].text
+            if (!error && data[0]) {
+                displayMessage(data[0])
+            }
         }
 
+        // WRITE: Send message + Email
         async function sendMessage() {
             const input = document.getElementById('msgInput')
             const text = input.value
             if (!text) return
 
-            // Supabase automatically attaches the User ID now!
-            const { error } = await supabaseClient.from('messages').insert({ text })
-            if (error) alert(error.message)
-            else input.value = ""
+            // Get current user
+            const { data: { session } } = await supabaseClient.auth.getSession()
+            
+            if (session) {
+                // INSERT both text AND email
+                const { error } = await supabaseClient
+                    .from('messages')
+                    .insert({ 
+                        text: text, 
+                        user_email: session.user.email 
+                    })
+                
+                if (error) alert(error.message)
+                else input.value = ""
+            }
         }
 
-        // Realtime Subscription
+        // REALTIME: Listen for updates
         supabaseClient
             .channel('public:messages') 
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, 
-                (payload) => { document.querySelector('h1').innerText = payload.new.text }
+                (payload) => { 
+                    displayMessage(payload.new) 
+                }
             )
             .subscribe()
 
